@@ -2,8 +2,10 @@
 let express = require("express");
 let ejs = require("ejs");
 let mongoose = require("mongoose");
-var encrypt = require("mongoose-encryption");
+// var encrypt = require("mongoose-encryption");
 require("dotenv").config();
+const bcrypt = require("bcrypt");
+const saltRounds = 10;
 
 // USING MODULES---------------------------------------------------------->
 
@@ -16,16 +18,16 @@ mongoose.connect(
   { useNewUrlParser: true }
 );
 
-var encKey = process.env.ENCRYPTION_KEY;
-var sigKey = process.env.DECRYPTION_KEY;
+// var encKey = process.env.ENCRYPTION_KEY;
+// var sigKey = process.env.DECRYPTION_KEY;
 
 const userSchema = new mongoose.Schema({ email: String, password: String });
 
-userSchema.plugin(encrypt, {
-  encryptionKey: encKey,
-  signingKey: sigKey,
-  encryptedFields: ["password"],
-}); // packs in extra bits of data
+// userSchema.plugin(encrypt, {    // for using mongoose-encrp
+//   encryptionKey: encKey,
+//   signingKey: sigKey,
+//   encryptedFields: ["password"],
+// });
 
 const User = new mongoose.model("User", userSchema);
 
@@ -54,13 +56,18 @@ app
         console.log(err);
       } else {
         if (foundUser) {
-          if (foundUser.password === password) {
-            res.render("secrets");
-            return;
-          }
+          bcrypt.compare(password, foundUser.password, function (err, result) {
+            if (result == true) {
+              res.render("secrets");
+              return;
+            } else {
+              res.render("home");
+            }
+          });
+        } else {
+          res.render("home");
         }
       }
-      res.render("home");
     });
   });
 
@@ -70,22 +77,23 @@ app
     res.render("register");
   })
   .post((req, res, next) => {
-    const newUser = new User({
-      email: req.body.username,
-      password: req.body.password,
-    });
-    newUser.save((err) => {
-      if (err) {
-        console.log(err);
-      } else {
-        res.render("secrets");
-      }
+    bcrypt.hash(req.body.password, saltRounds, function (err, hash) {
+      // the password from body and salrounds are passed in the function
+      // and hash is calledback
+      // then we store the hash by making a new user and saving it in database
+      const newUser = new User({
+        email: req.body.username,
+        password: hash,
+      });
+      newUser.save((err) => {
+        if (err) {
+          console.log(err);
+        } else {
+          res.render("secrets");
+        }
+      });
     });
   });
-
-// app.route("/secrets").get((req, res) => {
-//   res.render("secrets");
-// });
 
 app.route("submit").get((req, res) => {
   res.render("submit");
